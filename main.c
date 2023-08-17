@@ -5,8 +5,13 @@
 
 #define TRAIN_SIZE 60000
 #define TEST_SIZE 10000
-#define DIM 28
 
+#define HEIGHT 28
+#define WIDTH 28
+
+#define MAXCHAR 5120
+
+// TODO: Move struct declarations to header file
 typedef struct Matrix {
     float **elems;
     int rows;
@@ -132,12 +137,19 @@ typedef struct Image {
 img **read_csv(const char *filename, int num_samples)
 {
     img **images = (img **) malloc(sizeof(img *) * num_samples);
+    if (images == NULL) {
+        printf("Error while allocating dataset memory\n");
+        return NULL;
+    }
 
     FILE *fp = fopen(filename, "r");
+    if (fp == NULL) {
+        printf("File %s not found\n", filename);
+        return NULL;
+    }
 
-    #define MAXCHAR 5120
     char row[MAXCHAR];
-
+    // Skip first line of csv
     fgets(row, MAXCHAR, fp);
     char *token = strtok(row, ",");
 
@@ -146,20 +158,28 @@ img **read_csv(const char *filename, int num_samples)
         int x = 0, y = 0;
 
         images[current_row] = (img *) malloc(sizeof(img));
+        if (images[current_row] == NULL) {
+            printf("Error while allocating memory for image no. %d\n", current_row);
+            fclose(fp);
+            return NULL;
+        }
 
         fgets(row, MAXCHAR, fp);
         token = strtok(row, ",");
 
         images[current_row]->label = atoi(token);
         token = strtok(NULL, ",");
-        images[current_row]->content = create_matrix(DIM, DIM);
+        images[current_row]->content = create_matrix(HEIGHT, WIDTH);
+
+        // Parsing row of csv
+        // // Parsing row of csv
         while (token) {
+            // This is super ugly but it works for now
             if (y == 28) {
                 y = 0;
                 x++;
             }
             if (x == 28) {
-                break;
                 break;
             }
 
@@ -192,8 +212,8 @@ void free_imgs(img **images, int num_samples)
 void print_img(img *image)
 {
     printf("Label: %d\n\n", image->label);
-    for (int i = 0; i < DIM; i++) {
-        for (int j = 0; j < DIM; j++) {
+    for (int i = 0; i < HEIGHT; i++) {
+        for (int j = 0; j < WIDTH; j++) {
             printf("%.4f  ", image->content->elems[i][j]);
         }
 
@@ -203,7 +223,6 @@ void print_img(img *image)
 
 int main(void)
 {
-    srand(69);
     img **data = read_csv("data/mnist_train.csv", TRAIN_SIZE);
 
     // Print first sample
