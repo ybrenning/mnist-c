@@ -1,1 +1,1 @@
-gcc -Wall -Wextra -g -o main main.c
+gcc -Wall -Wextra -g -o main main.c -lm
