@@ -1,4 +1,4 @@
-# Neural Network in C 
+# Neural Network in C (Work in Progress)
 
 Coding a basic neural network from scratch in C.
 
