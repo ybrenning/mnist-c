@@ -92,6 +92,23 @@ matrix_t *mul(matrix_t *a, matrix_t *b)
     return res;
 }
 
+matrix_t *mul_elems(matrix_t *a, matrix_t *b)
+{
+    if (a->rows != b->rows || a->cols != b->cols) {
+        printf("Dimension mismatch, both matrices must be mxn\n");
+        return NULL;
+    }
+
+    matrix_t *res = create_matrix(a->rows, b->cols);
+    for (int i = 0; i < a->rows; i++) {
+        for (int j = 0; j < a->cols; j++) {
+            res->elems[i][j] = a->elems[i][j] * b->elems[i][j];
+        }
+    }
+
+    return res;
+}
+
 matrix_t *sum(matrix_t *a, matrix_t *b)
 {
     if (a->rows != b->rows || a->cols != b->cols) {
@@ -191,7 +208,6 @@ img **read_csv(const char *filename, int num_samples)
         images[current_row]->content = create_matrix(HEIGHT, WIDTH);
 
         // Parsing row of csv
-        // // Parsing row of csv
         while (token) {
             // This is super ugly but it works for now
             if (y == 28) {
@@ -202,7 +218,7 @@ img **read_csv(const char *filename, int num_samples)
                 break;
             }
 
-            images[current_row]->content->elems[x][y++] = (float) atoi(token);
+            images[current_row]->content->elems[x][y++] = (float) atoi(token) / 255.;
             token = strtok(NULL, ",");
         }
 
@@ -345,6 +361,8 @@ nn *create_nn(int input, int hidden, int output, float lr)
     nn->hidden = hidden;
     nn->output = output;
     nn->lr = lr;
+    printf("Creating hidden weights (%d, %d)\n", hidden, input);
+    printf("Creating output weights (%d, %d)\n", output, hidden);
     nn->hidden_w = create_matrix(hidden, input);
     nn->output_w = create_matrix(output, hidden);
     nn->hidden_w = fill_rand(nn->hidden_w);
@@ -370,68 +388,106 @@ matrix_t *scale(matrix_t *m, float s)
 
     return res;
 }
-void train_nn(nn *nn, matrix_t *X_train, matrix_t *y_train)
-{
-    matrix_t *hidden_outputs = matrix_sigmoid(mul(nn->hidden_w, X_train));
-    matrix_t *final_outputs = matrix_sigmoid(mul(nn->output_w, hidden_outputs));
 
-    // Error
-    matrix_t *output_e = sub(y_train, final_outputs);
-    matrix_t *hidden_e = mul(transpose(nn->output_w), output_e);
-
-    // Backprop
-    matrix_t *d_sig_mat = matrix_d_sigmoid(final_outputs);
-    matrix_t *mul_mat = mul(output_e, d_sig_mat);
-    matrix_t *transposed_mat = transpose(hidden_outputs);
-    matrix_t *dot_mat = mul(mul_mat, transposed_mat);
-    matrix_t *scaled_mat = scale(dot_mat, nn->lr);
-    matrix_t *added_mat = sum(nn->output_w, scaled_mat);
-
-    free_matrix(nn->output_w);
-    nn->output_w = added_mat;
-
-    free_matrix(d_sig_mat);
-    free_matrix(mul_mat);
-    free_matrix(transposed_mat);
-    free_matrix(dot_mat);
-    free_matrix(scaled_mat);
-
-    d_sig_mat = matrix_d_sigmoid(hidden_outputs);
-    mul_mat = mul(hidden_e, d_sig_mat);
-    transposed_mat = transpose(X_train);
-    dot_mat = mul(mul_mat, transposed_mat);
-    scaled_mat = scale(dot_mat, nn->lr);
-    added_mat = sum(nn->hidden_w, scaled_mat);
-
-    free_matrix(nn->hidden_w);
-    nn->hidden_w = added_mat;
-
-    free_matrix(d_sig_mat);
-    free_matrix(mul_mat);
-    free_matrix(transposed_mat);
-    free_matrix(dot_mat);
-    free_matrix(scaled_mat);
-
-    free_matrix(hidden_outputs);
-    free_matrix(final_outputs);
-    free_matrix(hidden_e);
-    free_matrix(output_e);
+matrix_t *forward(nn *nn, matrix_t *x) {
+    matrix_t *hidden_activations = matrix_sigmoid(mul(nn->hidden_w, x));
+    matrix_t *output_activations = matrix_sigmoid(mul(nn->output_w, hidden_activations));
+    return output_activations;
 }
 
-void train_batch_nn(nn *nn, img **imgs, int batch_size)
+void train_nn(nn *nn, img **imgs, int *indices, int batch_start, int batch_end)
 {
-    for (int i = 0; i < batch_size; i++) {
-        if (i % 100 == 0) {
-            printf("Image Number %d\n", i);
-        }
+    // print_matrix(nn->hidden_w);
+    // print_matrix(X_train);
+    // print_matrix(mul(nn->hidden_w, X_train));
+    // print_matrix(matrix_sigmoid(mul(nn->hidden_w, X_train)));
+    for (int i = batch_start; i < batch_end; i++) {
+        int j = indices[i];
+        img *current_image = imgs[j];
+        matrix_t *x = flatten(current_image->content, 0);
+        matrix_t *y = create_matrix(10, 1);
+        y->elems[current_image->label][0] = 1.f;
 
-        img *current_image = imgs[i];
-        matrix_t *img_content = flatten(current_image->content, 0);
-        matrix_t *output = create_matrix(10, 1);
-        output->elems[current_image->label][0] = 1.f;
-        train_nn(nn, img_content, output);
-        free_matrix(output);
-        free_matrix(img_content);
+        free_matrix(x);
+        free_matrix(y);
+    }
+    // matrix_t *hidden_outputs = matrix_sigmoid(mul(nn->hidden_w, X_train));
+    // matrix_t *final_outputs = matrix_sigmoid(mul(nn->output_w, hidden_outputs));
+    //
+    // // Error
+    // matrix_t *output_e = sub(y_train, final_outputs);
+    // matrix_t *hidden_e = mul(transpose(nn->output_w), output_e);
+    //
+    // // Backprop
+    // matrix_t *d_sig_mat = matrix_d_sigmoid(final_outputs);
+    // matrix_t *mul_mat = mul(output_e, d_sig_mat);
+    // matrix_t *transposed_mat = transpose(hidden_outputs);
+    // matrix_t *dot_mat = mul(mul_mat, transposed_mat);
+    // matrix_t *scaled_mat = scale(dot_mat, nn->lr);
+    // matrix_t *added_mat = sum(nn->output_w, scaled_mat);
+    //
+    // free_matrix(nn->output_w);
+    // nn->output_w = added_mat;
+    //
+    // free_matrix(d_sig_mat);
+    // free_matrix(mul_mat);
+    // free_matrix(transposed_mat);
+    // free_matrix(dot_mat);
+    // free_matrix(scaled_mat);
+    //
+    // d_sig_mat = matrix_d_sigmoid(hidden_outputs);
+    // mul_mat = mul(hidden_e, d_sig_mat);
+    // transposed_mat = transpose(X_train);
+    // dot_mat = mul(mul_mat, transposed_mat);
+    // scaled_mat = scale(dot_mat, nn->lr);
+    // added_mat = sum(nn->hidden_w, scaled_mat);
+    //
+    // free_matrix(nn->hidden_w);
+    // nn->hidden_w = added_mat;
+    //
+    // free_matrix(d_sig_mat);
+    // free_matrix(mul_mat);
+    // free_matrix(transposed_mat);
+    // free_matrix(dot_mat);
+    // free_matrix(scaled_mat);
+    //
+    // free_matrix(hidden_outputs);
+    // free_matrix(final_outputs);
+    // free_matrix(hidden_e);
+    // free_matrix(output_e);
+}
+
+void swap(int *a, int *b)
+{
+    int temp = *a;
+    *a = *b;
+    *b = temp;
+}
+ 
+void shuffle(int arr[], int n)
+{
+    for (int i = n - 1; i > 0; i--) {
+        int j = rand() % (i+1);
+        swap(&arr[i], &arr[j]);
+    }
+}
+
+void train_batch_nn(nn *nn, img **imgs, int batch_size, int n_epochs)
+{
+    int n_batches = TRAIN_SIZE / batch_size;
+    int *indices = (int *) malloc(sizeof(int) * TRAIN_SIZE);
+    for (int i = 0; i < TRAIN_SIZE; i++) {
+        indices[i] = i;
+    }
+    shuffle(indices, TRAIN_SIZE);
+
+    for (int i = 0; i < n_epochs; i++) {
+        for (int j = 0; j < n_batches - 1; j++) {
+            int batch_start = j*batch_size;
+            int batch_end = j*batch_size + batch_size;
+            train_nn(nn, imgs, indices, batch_start, batch_end);
+
+        }
     }
 }
 
@@ -482,17 +538,19 @@ double predict_imgs(nn *nn, img **imgs, int num_samples)
 
 int main(void)
 {
+    printf("Don't forget to activate random seed with srand()\n");
+
     img **X_train = read_csv("data/mnist_train.csv", TRAIN_SIZE / 2);
     img **X_test = read_csv("data/mnist_test.csv", TEST_SIZE / 2);
 
     // Print first sample
     print_img(X_train[0]);
 
-    nn *nn = create_nn(784, 256, 10, 0.01);
-    train_batch_nn(nn, X_train, TRAIN_SIZE / 2);
-    printf("Score %.4f\n", predict_imgs(nn, X_test, TEST_SIZE / 4));
-
-    free_nn(nn);
+    nn *nn = create_nn(784, 128, 10, 0.01);
+    train_batch_nn(nn, X_train, 100, 10);
+    // printf("Score %.4f\n", predict_imgs(nn, X_test, TEST_SIZE / 4));
+    //
+    // free_nn(nn);
 
     free_imgs(X_train, TRAIN_SIZE / 2);
     free_imgs(X_test, TEST_SIZE / 2);
